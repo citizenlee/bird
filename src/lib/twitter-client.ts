@@ -12,11 +12,31 @@ const QUERY_IDS = {
 	CreateTweet: 'znCVAd692dKBq9MgkEhKPQ',
 	CreateRetweet: 'ojPdsZsimiJrUGLR1sjUtA',
 	FavoriteTweet: 'lI07N6Otwv1PhnEgXILM7A',
+	TweetDetail: 'nBS-WpgA6ZG0CyNHD517JQ',
 };
 
 export interface TweetResult {
 	success: boolean;
 	tweetId?: string;
+	error?: string;
+}
+
+export interface TweetData {
+	id: string;
+	text: string;
+	author: {
+		username: string;
+		name: string;
+	};
+	createdAt?: string;
+	replyCount?: number;
+	retweetCount?: number;
+	likeCount?: number;
+}
+
+export interface GetTweetResult {
+	success: boolean;
+	tweet?: TweetData;
 	error?: string;
 }
 
@@ -71,6 +91,213 @@ export class TwitterClient {
 			origin: 'https://x.com',
 			referer: 'https://x.com/',
 		};
+	}
+
+	/**
+	 * Get tweet details by ID
+	 */
+	async getTweet(tweetId: string): Promise<GetTweetResult> {
+		const variables = {
+			focalTweetId: tweetId,
+			with_rux_injections: false,
+			rankingMode: 'Relevance',
+			includePromotedContent: true,
+			withCommunity: true,
+			withQuickPromoteEligibilityTweetFields: true,
+			withBirdwatchNotes: true,
+			withVoice: true,
+		};
+
+		const features = {
+			rweb_tipjar_consumption_enabled: true,
+			responsive_web_graphql_exclude_directive_enabled: true,
+			verified_phone_label_enabled: false,
+			creator_subscriptions_tweet_preview_api_enabled: true,
+			responsive_web_graphql_timeline_navigation_enabled: true,
+			responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
+			communities_web_enable_tweet_community_results_fetch: true,
+			c9s_tweet_anatomy_moderator_badge_enabled: true,
+			articles_preview_enabled: true,
+			responsive_web_edit_tweet_api_enabled: true,
+			graphql_is_translatable_rweb_tweet_is_translatable_enabled: true,
+			view_counts_everywhere_api_enabled: true,
+			longform_notetweets_consumption_enabled: true,
+			responsive_web_twitter_article_tweet_consumption_enabled: true,
+			tweet_awards_web_tipping_enabled: false,
+			creator_subscriptions_quote_tweet_preview_enabled: false,
+			freedom_of_speech_not_reach_fetch_enabled: true,
+			standardized_nudges_misinfo: true,
+			tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
+			rweb_video_timestamps_enabled: true,
+			longform_notetweets_rich_text_read_enabled: true,
+			longform_notetweets_inline_media_enabled: true,
+			responsive_web_enhance_cards_enabled: false,
+		};
+
+		const params = new URLSearchParams({
+			variables: JSON.stringify(variables),
+			features: JSON.stringify(features),
+		});
+
+		const url = `${TWITTER_API_BASE}/${QUERY_IDS.TweetDetail}/TweetDetail?${params}`;
+
+		try {
+			const response = await fetch(url, {
+				method: 'GET',
+				headers: this.getHeaders(),
+			});
+
+			if (!response.ok) {
+				const text = await response.text();
+				return {
+					success: false,
+					error: `HTTP ${response.status}: ${text.slice(0, 200)}`,
+				};
+			}
+
+			const data = (await response.json()) as {
+				data?: {
+					tweetResult?: {
+						result?: {
+							rest_id?: string;
+							legacy?: {
+								full_text?: string;
+								created_at?: string;
+								reply_count?: number;
+								retweet_count?: number;
+								favorite_count?: number;
+							};
+							core?: {
+								user_results?: {
+									result?: {
+										legacy?: {
+											screen_name?: string;
+											name?: string;
+										};
+									};
+								};
+							};
+						};
+					};
+					threaded_conversation_with_injections_v2?: {
+						instructions?: Array<{
+							entries?: Array<{
+								content?: {
+									itemContent?: {
+										tweet_results?: {
+											result?: {
+												rest_id?: string;
+												legacy?: {
+													full_text?: string;
+													created_at?: string;
+													reply_count?: number;
+													retweet_count?: number;
+													favorite_count?: number;
+												};
+												core?: {
+													user_results?: {
+														result?: {
+															legacy?: {
+																screen_name?: string;
+																name?: string;
+															};
+														};
+													};
+												};
+											};
+										};
+									};
+								};
+							}>;
+						}>;
+					};
+				};
+				errors?: Array<{ message: string }>;
+			};
+
+			if (data.errors && data.errors.length > 0) {
+				return {
+					success: false,
+					error: data.errors.map((e) => e.message).join(', '),
+				};
+			}
+
+			// Try to find the tweet in the conversation thread
+			const instructions = data.data?.threaded_conversation_with_injections_v2?.instructions;
+			let tweetResult:
+				| {
+						rest_id?: string;
+						legacy?: {
+							full_text?: string;
+							created_at?: string;
+							reply_count?: number;
+							retweet_count?: number;
+							favorite_count?: number;
+						};
+						core?: {
+							user_results?: {
+								result?: {
+									legacy?: {
+										screen_name?: string;
+										name?: string;
+									};
+								};
+							};
+						};
+				  }
+				| undefined;
+
+			if (instructions) {
+				for (const instruction of instructions) {
+					for (const entry of instruction.entries || []) {
+						const result = entry.content?.itemContent?.tweet_results?.result;
+						if (result?.rest_id === tweetId) {
+							tweetResult = result;
+							break;
+						}
+					}
+					if (tweetResult) break;
+				}
+			}
+
+			if (!tweetResult) {
+				return {
+					success: false,
+					error: 'Tweet not found in response',
+				};
+			}
+
+			const legacy = tweetResult.legacy;
+			const userLegacy = tweetResult.core?.user_results?.result?.legacy;
+
+			if (!legacy?.full_text || !userLegacy?.screen_name) {
+				return {
+					success: false,
+					error: 'Incomplete tweet data',
+				};
+			}
+
+			return {
+				success: true,
+				tweet: {
+					id: tweetResult.rest_id || tweetId,
+					text: legacy.full_text,
+					author: {
+						username: userLegacy.screen_name,
+						name: userLegacy.name || userLegacy.screen_name,
+					},
+					createdAt: legacy.created_at,
+					replyCount: legacy.reply_count,
+					retweetCount: legacy.retweet_count,
+					likeCount: legacy.favorite_count,
+				},
+			};
+		} catch (error) {
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : String(error),
+			};
+		}
 	}
 
 	/**

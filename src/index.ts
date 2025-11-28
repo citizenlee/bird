@@ -115,6 +115,52 @@ program
 		}
 	});
 
+// Read command - fetch tweet content
+program
+	.command('read')
+	.description('Read/fetch a tweet by ID or URL')
+	.argument('<tweet-id-or-url>', 'Tweet ID or URL to read')
+	.option('--json', 'Output as JSON')
+	.action(async (tweetIdOrUrl: string, cmdOpts: { json?: boolean }) => {
+		const opts = program.opts();
+		const { cookies, warnings } = await resolveCredentials({
+			authToken: opts.authToken,
+			ct0: opts.ct0,
+			chromeProfile: opts.chromeProfile,
+		});
+
+		for (const warning of warnings) {
+			console.error(`⚠️  ${warning}`);
+		}
+
+		if (!cookies.authToken || !cookies.ct0) {
+			console.error('❌ Missing required credentials');
+			process.exit(1);
+		}
+
+		const tweetId = extractTweetId(tweetIdOrUrl);
+		const client = new TwitterClient({ cookies });
+		const result = await client.getTweet(tweetId);
+
+		if (result.success && result.tweet) {
+			if (cmdOpts.json) {
+				console.log(JSON.stringify(result.tweet, null, 2));
+			} else {
+				console.log(`@${result.tweet.author.username} (${result.tweet.author.name}):`);
+				console.log(result.tweet.text);
+				if (result.tweet.createdAt) {
+					console.log(`\n📅 ${result.tweet.createdAt}`);
+				}
+				console.log(
+					`❤️ ${result.tweet.likeCount ?? 0}  🔁 ${result.tweet.retweetCount ?? 0}  💬 ${result.tweet.replyCount ?? 0}`,
+				);
+			}
+		} else {
+			console.error(`❌ Failed to read tweet: ${result.error}`);
+			process.exit(1);
+		}
+	});
+
 // Check command - verify credentials
 program
 	.command('check')
