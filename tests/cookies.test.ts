@@ -48,7 +48,9 @@ describe('cookies', () => {
         if (lower.includes('firefox')) return true;
         return false;
       });
-      (fs.readdirSync as unknown as vi.Mock).mockReturnValue([{ isDirectory: () => true, name: 'abc.default-release' }]);
+      (fs.readdirSync as unknown as vi.Mock).mockReturnValue([
+        { isDirectory: () => true, name: 'abc.default-release' },
+      ]);
       (fs.copyFileSync as unknown as vi.Mock).mockImplementation(() => {});
       (fs.mkdtempSync as unknown as vi.Mock).mockReturnValue('/tmp/test-dir');
 
@@ -56,7 +58,11 @@ describe('cookies', () => {
       const { execSync } = await import('node:child_process');
       (execSync as unknown as vi.Mock).mockReturnValue('auth_token|firefox_auth\nct0|firefox_ct0');
 
-      const result = await resolveCredentials({ allowFirefox: true, allowChrome: false, firefoxProfile: 'abc.default-release' });
+      const result = await resolveCredentials({
+        allowFirefox: true,
+        allowChrome: false,
+        firefoxProfile: 'abc.default-release',
+      });
 
       expect(result.cookies.authToken).toBe('firefox_auth');
       expect(result.cookies.ct0).toBe('firefox_ct0');
@@ -135,6 +141,26 @@ describe('cookies', () => {
         'Missing ct0 - provide via --ct0, CT0 env var, or login to x.com in Chrome/Firefox',
       );
     });
+
+    it('falls back to Chrome when enabled and Firefox disabled', async () => {
+      const fs = await import('node:fs');
+      const { execSync } = await import('node:child_process');
+      (fs.existsSync as unknown as vi.Mock).mockImplementation((path: string) => path.includes('Cookies'));
+      (fs.copyFileSync as unknown as vi.Mock).mockImplementation(() => {});
+      (execSync as unknown as vi.Mock).mockImplementation((cmd: string) => {
+        if (cmd.includes('sqlite3')) {
+          return 'auth_token|746573745f61757468\nct0|746573745f637430';
+        }
+        return '';
+      });
+
+      const { resolveCredentials } = await import('../src/lib/cookies.js');
+      const result = await resolveCredentials({ allowFirefox: false, allowChrome: true, chromeProfile: 'Default' });
+
+      expect(result.cookies.authToken).toBe('test_auth');
+      expect(result.cookies.ct0).toBe('test_ct0');
+      expect(result.cookies.source).toContain('Chrome');
+    });
   });
 
   describe('extractCookiesFromChrome', () => {
@@ -174,6 +200,41 @@ describe('cookies', () => {
       expect(result.cookies.authToken).toBeNull();
       expect(result.cookies.ct0).toBeNull();
       expect(result.warnings.some((w) => w.includes('No Twitter cookies found in Chrome'))).toBe(true);
+    });
+  });
+
+  describe('extractCookiesFromFirefox', () => {
+    it('warns when Firefox cookies database is missing', async () => {
+      const { extractCookiesFromFirefox } = await import('../src/lib/cookies.js');
+      const result = await extractCookiesFromFirefox('missing-profile');
+
+      expect(result.cookies.authToken).toBeNull();
+      expect(result.cookies.ct0).toBeNull();
+      expect(result.warnings).toContain('Firefox cookies database not found.');
+    });
+
+    it('warns when Firefox DB exists but contains no cookies', async () => {
+      const fs = await import('node:fs');
+      const { execSync } = await import('node:child_process');
+      (fs.existsSync as unknown as vi.Mock).mockImplementation((path: string) => {
+        const lower = path.toLowerCase();
+        if (lower.endsWith('cookies.sqlite')) return true;
+        if (lower.includes('firefox')) return true;
+        return false;
+      });
+      (fs.readdirSync as unknown as vi.Mock).mockReturnValue([
+        { isDirectory: () => true, name: 'abc.default-release' },
+      ]);
+      (fs.copyFileSync as unknown as vi.Mock).mockImplementation(() => {});
+      (fs.mkdtempSync as unknown as vi.Mock).mockReturnValue('/tmp/test-dir');
+      (execSync as unknown as vi.Mock).mockReturnValue('');
+
+      const { extractCookiesFromFirefox } = await import('../src/lib/cookies.js');
+      const result = await extractCookiesFromFirefox('abc.default-release');
+
+      expect(result.cookies.authToken).toBeNull();
+      expect(result.cookies.ct0).toBeNull();
+      expect(result.warnings.some((w) => w.includes('No Twitter cookies found in Firefox'))).toBe(true);
     });
   });
 });
