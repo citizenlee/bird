@@ -20,6 +20,8 @@ export interface CookieExtractionResult {
   warnings: string[];
 }
 
+export type CookieSource = 'auto' | 'safari' | 'chrome' | 'firefox';
+
 function normalizeValue(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -444,6 +446,7 @@ export async function extractCookiesFromFirefox(profile?: string): Promise<Cooki
 export async function resolveCredentials(options: {
   authToken?: string;
   ct0?: string;
+  cookieSource?: CookieSource;
   allowSafari?: boolean;
   chromeProfile?: string;
   firefoxProfile?: string;
@@ -456,6 +459,8 @@ export async function resolveCredentials(options: {
     ct0: null,
     source: null,
   };
+
+  const cookieSource: CookieSource = options.cookieSource ?? 'auto';
 
   // 1. CLI arguments (highest priority)
   if (options.authToken) {
@@ -497,48 +502,69 @@ export async function resolveCredentials(options: {
   const allowChrome = options.allowChrome ?? true;
   const allowFirefox = options.allowFirefox ?? true;
 
-  // 3. Safari cookies (preferred browser fallback)
-  if (allowSafari && (!cookies.authToken || !cookies.ct0)) {
-    const safariResult = await extractCookiesFromSafari();
-    warnings.push(...safariResult.warnings);
+  const sourcesToTry: Array<Exclude<CookieSource, 'auto'>> =
+    cookieSource === 'auto' ? ['safari', 'chrome', 'firefox'] : [cookieSource];
 
-    if (!cookies.authToken && safariResult.cookies.authToken) {
-      cookies.authToken = safariResult.cookies.authToken;
-      cookies.source = safariResult.cookies.source;
-    }
-    if (!cookies.ct0 && safariResult.cookies.ct0) {
-      cookies.ct0 = safariResult.cookies.ct0;
-      if (!cookies.source) cookies.source = safariResult.cookies.source;
-    }
-  }
+  for (const source of sourcesToTry) {
+    if (cookies.authToken && cookies.ct0) break;
 
-  // 4. Chrome cookies (secondary browser fallback)
-  if (allowChrome && (!cookies.authToken || !cookies.ct0)) {
-    const chromeResult = await extractCookiesFromChrome(options.chromeProfile);
-    warnings.push(...chromeResult.warnings);
+    if (source === 'safari') {
+      if (!allowSafari) {
+        warnings.push('Safari cookie extraction disabled (allowSafari=false).');
+        continue;
+      }
 
-    if (!cookies.authToken && chromeResult.cookies.authToken) {
-      cookies.authToken = chromeResult.cookies.authToken;
-      cookies.source = chromeResult.cookies.source;
-    }
-    if (!cookies.ct0 && chromeResult.cookies.ct0) {
-      cookies.ct0 = chromeResult.cookies.ct0;
-      if (!cookies.source) cookies.source = chromeResult.cookies.source;
-    }
-  }
+      const safariResult = await extractCookiesFromSafari();
+      warnings.push(...safariResult.warnings);
 
-  // 5. Firefox cookies (tertiary browser fallback)
-  if (allowFirefox && (!cookies.authToken || !cookies.ct0)) {
-    const firefoxResult = await extractCookiesFromFirefox(options.firefoxProfile);
-    warnings.push(...firefoxResult.warnings);
-
-    if (!cookies.authToken && firefoxResult.cookies.authToken) {
-      cookies.authToken = firefoxResult.cookies.authToken;
-      cookies.source = firefoxResult.cookies.source;
+      if (!cookies.authToken && safariResult.cookies.authToken) {
+        cookies.authToken = safariResult.cookies.authToken;
+        cookies.source = safariResult.cookies.source;
+      }
+      if (!cookies.ct0 && safariResult.cookies.ct0) {
+        cookies.ct0 = safariResult.cookies.ct0;
+        if (!cookies.source) cookies.source = safariResult.cookies.source;
+      }
+      continue;
     }
-    if (!cookies.ct0 && firefoxResult.cookies.ct0) {
-      cookies.ct0 = firefoxResult.cookies.ct0;
-      if (!cookies.source) cookies.source = firefoxResult.cookies.source;
+
+    if (source === 'chrome') {
+      if (!allowChrome) {
+        warnings.push('Chrome cookie extraction disabled (allowChrome=false).');
+        continue;
+      }
+
+      const chromeResult = await extractCookiesFromChrome(options.chromeProfile);
+      warnings.push(...chromeResult.warnings);
+
+      if (!cookies.authToken && chromeResult.cookies.authToken) {
+        cookies.authToken = chromeResult.cookies.authToken;
+        cookies.source = chromeResult.cookies.source;
+      }
+      if (!cookies.ct0 && chromeResult.cookies.ct0) {
+        cookies.ct0 = chromeResult.cookies.ct0;
+        if (!cookies.source) cookies.source = chromeResult.cookies.source;
+      }
+      continue;
+    }
+
+    if (source === 'firefox') {
+      if (!allowFirefox) {
+        warnings.push('Firefox cookie extraction disabled (allowFirefox=false).');
+        continue;
+      }
+
+      const firefoxResult = await extractCookiesFromFirefox(options.firefoxProfile);
+      warnings.push(...firefoxResult.warnings);
+
+      if (!cookies.authToken && firefoxResult.cookies.authToken) {
+        cookies.authToken = firefoxResult.cookies.authToken;
+        cookies.source = firefoxResult.cookies.source;
+      }
+      if (!cookies.ct0 && firefoxResult.cookies.ct0) {
+        cookies.ct0 = firefoxResult.cookies.ct0;
+        if (!cookies.source) cookies.source = firefoxResult.cookies.source;
+      }
     }
   }
 

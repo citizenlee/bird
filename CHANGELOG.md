@@ -2,6 +2,9 @@
 
 ## 0.3.1 — Unreleased
 
+### Added
+- Cookie source selection: `--cookie-source auto|safari|chrome|firefox` + `cookieSource` config option.
+
 ## 0.3.0 — 2025-12-26
 
 ### Added

@@ -105,6 +105,64 @@ describe('cookies', () => {
   });
 
   describe('resolveCredentials', () => {
+    it('honors cookieSource=firefox even when Safari has cookies', async () => {
+      const { resolveCredentials } = await import('../src/lib/cookies.js');
+      const fs = await import('node:fs');
+      const { execSync } = await import('node:child_process');
+
+      // Safari cookie file exists + contains different cookies
+      (fs.existsSync as unknown as vi.Mock).mockImplementation((path: string) => {
+        const lower = path.toLowerCase();
+        if (lower.endsWith('cookies.binarycookies')) return true;
+        if (lower.endsWith('cookies.sqlite')) return true;
+        if (lower.includes('firefox')) return true;
+        return false;
+      });
+      (fs.readdirSync as unknown as vi.Mock).mockReturnValue([
+        { isDirectory: () => true, name: 'abc.default-release' },
+      ]);
+      (fs.copyFileSync as unknown as vi.Mock).mockImplementation(() => {});
+      (fs.readFileSync as unknown as vi.Mock).mockReturnValue(
+        buildSafariCookiesFile([
+          buildSafariCookieRecord({ domain: '.x.com', name: 'auth_token', value: 'safari_auth' }),
+          buildSafariCookieRecord({ domain: '.x.com', name: 'ct0', value: 'safari_ct0' }),
+        ]),
+      );
+
+      // Firefox sqlite3 extraction returns different cookies
+      (execSync as unknown as vi.Mock).mockImplementation((cmd: string) => {
+        if (cmd.includes('sqlite3')) return 'auth_token|firefox_auth\nct0|firefox_ct0';
+        return '';
+      });
+
+      const result = await resolveCredentials({ cookieSource: 'firefox', allowChrome: false });
+      expect(result.cookies.authToken).toBe('firefox_auth');
+      expect(result.cookies.ct0).toBe('firefox_ct0');
+      expect(result.cookies.source).toContain('Firefox');
+    });
+
+    it('honors cookieSource=safari', async () => {
+      const { resolveCredentials } = await import('../src/lib/cookies.js');
+      const fs = await import('node:fs');
+
+      (fs.existsSync as unknown as vi.Mock).mockImplementation((path: string) =>
+        path.toLowerCase().endsWith('cookies.binarycookies'),
+      );
+      (fs.copyFileSync as unknown as vi.Mock).mockImplementation(() => {});
+      (fs.mkdtempSync as unknown as vi.Mock).mockReturnValue('/tmp/test-dir');
+      (fs.readFileSync as unknown as vi.Mock).mockReturnValue(
+        buildSafariCookiesFile([
+          buildSafariCookieRecord({ domain: '.x.com', name: 'auth_token', value: 'safari_auth' }),
+          buildSafariCookieRecord({ domain: '.x.com', name: 'ct0', value: 'safari_ct0' }),
+        ]),
+      );
+
+      const result = await resolveCredentials({ cookieSource: 'safari', allowChrome: false, allowFirefox: false });
+      expect(result.cookies.authToken).toBe('safari_auth');
+      expect(result.cookies.ct0).toBe('safari_ct0');
+      expect(result.cookies.source).toBe('Safari');
+    });
+
     it('uses firefox when enabled and returns cookies', async () => {
       const { resolveCredentials } = await import('../src/lib/cookies.js');
       const fs = await import('node:fs');

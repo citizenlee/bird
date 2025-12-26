@@ -12,11 +12,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import JSON5 from 'json5';
 import kleur from 'kleur';
 import { resolveCliInvocation } from './lib/cli-args.js';
-import { resolveCredentials } from './lib/cookies.js';
+import { type CookieSource, resolveCredentials } from './lib/cookies.js';
 import { extractTweetId } from './lib/extract-tweet-id.js';
 import { mentionsQueryFromUserOption, normalizeHandle } from './lib/normalize-handle.js';
 import {
@@ -70,6 +70,7 @@ const colors = {
 type BirdConfig = {
   chromeProfile?: string;
   firefoxProfile?: string;
+  cookieSource?: CookieSource;
   allowSafari?: boolean;
   allowChrome?: boolean;
   allowFirefox?: boolean;
@@ -145,12 +146,38 @@ program
   .option('--ct0 <token>', 'Twitter ct0 cookie')
   .option('--chrome-profile <name>', 'Chrome profile name for cookie extraction', config.chromeProfile)
   .option('--firefox-profile <name>', 'Firefox profile name for cookie extraction', config.firefoxProfile)
+  .addOption(
+    new Option('--cookie-source <source>', 'Cookie source for browser cookie extraction')
+      .choices(['auto', 'safari', 'chrome', 'firefox'])
+      .default(config.cookieSource ?? 'auto'),
+  )
   .option('--media <path>', 'Attach media file (repeatable, up to 4 images or 1 video)', collect, [])
   .option('--alt <text>', 'Alt text for the corresponding --media (repeatable)', collect, [])
   .option('--timeout <ms>', 'Request timeout in milliseconds')
   .option('--plain', 'Plain output (stable, no emoji, no color)')
   .option('--no-emoji', 'Disable emoji output')
   .option('--no-color', 'Disable ANSI colors (or set NO_COLOR)');
+
+type CredentialsOptions = {
+  authToken?: string;
+  ct0?: string;
+  chromeProfile?: string;
+  firefoxProfile?: string;
+  cookieSource?: CookieSource;
+};
+
+function resolveCredentialsFromOptions(opts: CredentialsOptions) {
+  return resolveCredentials({
+    authToken: opts.authToken,
+    ct0: opts.ct0,
+    cookieSource: opts.cookieSource ?? config.cookieSource ?? 'auto',
+    chromeProfile: opts.chromeProfile || config.chromeProfile,
+    firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
+    allowSafari: config.allowSafari ?? true,
+    allowChrome: config.allowChrome ?? true,
+    allowFirefox: config.allowFirefox ?? true,
+  });
+}
 
 program.hook('preAction', (_thisCommand, actionCommand) => {
   applyOutputFromCommand(actionCommand);
@@ -318,15 +345,7 @@ program
       process.exit(1);
     }
 
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     for (const warning of warnings) {
       console.error(`${p('warn')}${warning}`);
@@ -385,15 +404,7 @@ program
     }
     const tweetId = extractTweetId(tweetIdOrUrl);
 
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     for (const warning of warnings) {
       console.error(`${p('warn')}${warning}`);
@@ -448,15 +459,7 @@ program
 
     const tweetId = extractTweetId(tweetIdOrUrl);
 
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     for (const warning of warnings) {
       console.error(`${p('warn')}${warning}`);
@@ -498,15 +501,7 @@ program
     const timeoutMs = resolveTimeoutFromOptions(opts);
     const tweetId = extractTweetId(tweetIdOrUrl);
 
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     for (const warning of warnings) {
       console.error(`${p('warn')}${warning}`);
@@ -539,15 +534,7 @@ program
     const timeoutMs = resolveTimeoutFromOptions(opts);
     const tweetId = extractTweetId(tweetIdOrUrl);
 
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     for (const warning of warnings) {
       console.error(`${p('warn')}${warning}`);
@@ -581,15 +568,7 @@ program
     const timeoutMs = resolveTimeoutFromOptions(opts);
     const count = Number.parseInt(cmdOpts.count || '10', 10);
 
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     for (const warning of warnings) {
       console.error(`${p('warn')}${warning}`);
@@ -631,15 +610,7 @@ program
 
     let query: string | null = fromUserOpt.query;
 
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     for (const warning of warnings) {
       console.error(`${p('warn')}${warning}`);
@@ -683,15 +654,7 @@ program
     const opts = program.opts();
     const timeoutMs = resolveTimeoutFromOptions(opts);
 
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     for (const warning of warnings) {
       console.error(`${p('warn')}${warning}`);
@@ -728,15 +691,7 @@ program
   .description('Check credential availability')
   .action(async () => {
     const opts = program.opts();
-    const { cookies, warnings } = await resolveCredentials({
-      authToken: opts.authToken,
-      ct0: opts.ct0,
-      chromeProfile: opts.chromeProfile || config.chromeProfile,
-      firefoxProfile: opts.firefoxProfile || config.firefoxProfile,
-      allowSafari: config.allowSafari ?? true,
-      allowChrome: config.allowChrome ?? true,
-      allowFirefox: config.allowFirefox ?? true,
-    });
+    const { cookies, warnings } = await resolveCredentialsFromOptions(opts);
 
     console.log(`${p('info')}Credential check`);
     console.log('─'.repeat(40));
