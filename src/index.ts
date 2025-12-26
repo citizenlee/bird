@@ -17,7 +17,7 @@ import JSON5 from 'json5';
 import kleur from 'kleur';
 import { resolveCliInvocation } from './lib/cli-args.js';
 import { resolveCredentials } from './lib/cookies.js';
-import { resolveEngineMode, shouldUseSweetistics, type EngineMode } from './lib/engine.js';
+import { type EngineMode, resolveEngineMode, shouldUseSweetistics } from './lib/engine.js';
 import { extractTweetId } from './lib/extract-tweet-id.js';
 import { SweetisticsClient } from './lib/sweetistics-client.js';
 import { type TweetData, TwitterClient } from './lib/twitter-client.js';

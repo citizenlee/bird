@@ -8,7 +8,7 @@ export function resolveEngineMode(value?: string): EngineMode {
   return 'auto';
 }
 
-export function shouldUseSweetistics(engine: EngineMode, hasApiKey: boolean): boolean {
+export function shouldUseSweetistics(engine: EngineMode, _hasApiKey: boolean): boolean {
   if (engine === 'sweetistics') return true;
   if (engine === 'graphql') return false;
   return false; // auto: GraphQL primary, Sweetistics only as fallback
