@@ -27,6 +27,7 @@ bird replies 1234567890123456789
 # Search + mentions
 bird search "from:steipete" -n 5
 bird mentions -n 5
+bird mentions --user @steipete -n 5
 ```
 
 ## Commands
@@ -38,7 +39,7 @@ bird mentions -n 5
 - `bird replies <tweet-id-or-url> [--json]` — list replies to a tweet.
 - `bird thread <tweet-id-or-url> [--json]` — show the full conversation thread.
 - `bird search "<query>" [-n count] [--json]` — search for tweets matching a query.
-- `bird mentions [-n count] [--json]` — find tweets mentioning @clawdbot.
+- `bird mentions [-n count] [--user @handle] [--json]` — find tweets mentioning a user (defaults to the authenticated user).
 - `bird whoami` — print which Twitter account your cookies belong to.
 - `bird check` — show which credentials are available and where they were sourced from.
 
@@ -91,6 +92,10 @@ Environment shortcuts:
 
 - `--json` prints raw tweet objects for read/replies/thread/search/mentions.
 - `read` returns full text for Notes and Articles when present.
+
+## Version
+
+`bird --version` prints `package.json` version plus current git sha when available, e.g. `0.1.1 (3df7969b)`.
 
 ## Media uploads (Sweetistics only)
 

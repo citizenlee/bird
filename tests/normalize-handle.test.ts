@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeHandle } from '../src/lib/normalize-handle.js';
+import { mentionsQueryFromUserOption, normalizeHandle } from '../src/lib/normalize-handle.js';
 
 describe('normalizeHandle', () => {
   it('accepts bare handle', () => {
@@ -20,5 +20,22 @@ describe('normalizeHandle', () => {
     expect(normalizeHandle('@stei-pete')).toBeNull();
     expect(normalizeHandle('@steipete!')).toBeNull();
     expect(normalizeHandle('a'.repeat(16))).toBeNull();
+  });
+});
+
+describe('mentionsQueryFromUserOption', () => {
+  it('returns null query when option omitted', () => {
+    expect(mentionsQueryFromUserOption(undefined)).toEqual({ query: null, error: null });
+  });
+
+  it('returns normalized @query for valid handle', () => {
+    expect(mentionsQueryFromUserOption('@steipete')).toEqual({ query: '@steipete', error: null });
+    expect(mentionsQueryFromUserOption(' steipete ')).toEqual({ query: '@steipete', error: null });
+  });
+
+  it('returns error for invalid handle', () => {
+    const result = mentionsQueryFromUserOption('@stei-pete');
+    expect(result.query).toBeNull();
+    expect(result.error).toMatch(/Invalid --user handle/);
   });
 });

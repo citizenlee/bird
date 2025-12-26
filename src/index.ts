@@ -19,7 +19,7 @@ import { resolveCliInvocation } from './lib/cli-args.js';
 import { resolveCredentials } from './lib/cookies.js';
 import { type EngineMode, resolveEngineMode, shouldUseSweetistics } from './lib/engine.js';
 import { extractTweetId } from './lib/extract-tweet-id.js';
-import { normalizeHandle } from './lib/normalize-handle.js';
+import { mentionsQueryFromUserOption, normalizeHandle } from './lib/normalize-handle.js';
 import { SweetisticsClient } from './lib/sweetistics-client.js';
 import { type TweetData, TwitterClient } from './lib/twitter-client.js';
 import { getCliVersion } from './lib/version.js';
@@ -817,8 +817,13 @@ program
     const engine = resolveEngineMode(opts.engine);
     const useSweetistics = shouldUseSweetistics(engine, Boolean(sweetistics.apiKey));
 
-    const explicitHandle = normalizeHandle(cmdOpts.user);
-    let query: string | null = explicitHandle ? `@${explicitHandle}` : null;
+    const fromUserOpt = mentionsQueryFromUserOption(cmdOpts.user);
+    if (fromUserOpt.error) {
+      console.error(`❌ ${fromUserOpt.error}`);
+      process.exit(2);
+    }
+
+    let query: string | null = fromUserOpt.query;
 
     if (useSweetistics) {
       if (!sweetistics.apiKey) {
