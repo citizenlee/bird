@@ -349,6 +349,9 @@ program
       'SearchTimeline',
       'UserArticlesTweets',
       'Bookmarks',
+      'Following',
+      'Followers',
+      'Likes',
     ];
 
     if (cmdOpts.fresh) {

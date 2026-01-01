@@ -2047,6 +2047,16 @@ export class TwitterClient {
     };
   }
 
+  private async getFollowingQueryIds(): Promise<string[]> {
+    const primary = await this.getQueryId('Following');
+    return Array.from(new Set([primary, 'BEkNpEt5pNETESoqMsTEGA']));
+  }
+
+  private async getFollowersQueryIds(): Promise<string[]> {
+    const primary = await this.getQueryId('Followers');
+    return Array.from(new Set([primary, 'kuFUYP9eV1FPoEy4N-pi7w']));
+  }
+
   private parseUsersFromInstructions(
     instructions: Array<{ type?: string; entries?: Array<unknown> }> | undefined,
   ): TwitterUser[] {
@@ -2057,17 +2067,18 @@ export class TwitterClient {
     const users: TwitterUser[] = [];
 
     for (const instruction of instructions) {
-      if (instruction.type !== 'TimelineAddEntries' || !instruction.entries) {
+      if (!instruction.entries) {
         continue;
       }
 
       for (const entry of instruction.entries) {
         const content = (entry as { content?: { itemContent?: { user_results?: { result?: unknown } } } })?.content;
-        const userResult = content?.itemContent?.user_results?.result as
+        const rawUserResult = content?.itemContent?.user_results?.result as
           | {
               __typename?: string;
               rest_id?: string;
               is_blue_verified?: boolean;
+              user?: unknown;
               legacy?: {
                 screen_name?: string;
                 name?: string;
@@ -2088,17 +2099,26 @@ export class TwitterClient {
             }
           | undefined;
 
+        const userResult =
+          rawUserResult?.__typename === 'UserWithVisibilityResults' && rawUserResult.user
+            ? (rawUserResult.user as typeof rawUserResult)
+            : rawUserResult;
+
         if (!userResult || userResult.__typename !== 'User') {
           continue;
         }
 
         const legacy = userResult.legacy;
         const core = userResult.core;
+        const username = legacy?.screen_name ?? core?.screen_name;
+        if (!userResult.rest_id || !username) {
+          continue;
+        }
 
         users.push({
-          id: userResult.rest_id ?? '',
-          username: legacy?.screen_name ?? core?.screen_name ?? '',
-          name: legacy?.name ?? core?.name ?? '',
+          id: userResult.rest_id,
+          username,
+          name: legacy?.name ?? core?.name ?? username,
           description: legacy?.description,
           followers_count: legacy?.followers_count,
           following_count: legacy?.friends_count,
@@ -2129,46 +2149,77 @@ export class TwitterClient {
       features: JSON.stringify(features),
     });
 
-    const queryId = await this.getQueryId('Following');
-    const url = `${TWITTER_API_BASE}/${queryId}/Following?${params.toString()}`;
+    const tryOnce = async () => {
+      let lastError: string | undefined;
+      let had404 = false;
+      const queryIds = await this.getFollowingQueryIds();
 
-    try {
-      const response = await this.fetchWithTimeout(url, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
+      for (const queryId of queryIds) {
+        const url = `${TWITTER_API_BASE}/${queryId}/Following?${params.toString()}`;
 
-      if (!response.ok) {
-        const text = await response.text();
-        return { success: false, error: `HTTP ${response.status}: ${text.slice(0, 200)}` };
-      }
+        try {
+          const response = await this.fetchWithTimeout(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+          });
 
-      const data = (await response.json()) as {
-        data?: {
-          user?: {
-            result?: {
-              timeline?: {
-                timeline?: {
-                  instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+          if (response.status === 404) {
+            had404 = true;
+            lastError = `HTTP ${response.status}`;
+            continue;
+          }
+
+          if (!response.ok) {
+            const text = await response.text();
+            return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+          }
+
+          const data = (await response.json()) as {
+            data?: {
+              user?: {
+                result?: {
+                  timeline?: {
+                    timeline?: {
+                      instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+                    };
+                  };
                 };
               };
             };
+            errors?: Array<{ message: string }>;
           };
-        };
-        errors?: Array<{ message: string }>;
-      };
 
-      if (data.errors && data.errors.length > 0) {
-        return { success: false, error: data.errors.map((e) => e.message).join(', ') };
+          if (data.errors && data.errors.length > 0) {
+            return { success: false as const, error: data.errors.map((e) => e.message).join(', '), had404 };
+          }
+
+          const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
+          const users = this.parseUsersFromInstructions(instructions);
+
+          return { success: true as const, users, had404 };
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+        }
       }
 
-      const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
-      const users = this.parseUsersFromInstructions(instructions);
+      return { success: false as const, error: lastError ?? 'Unknown error fetching following', had404 };
+    };
 
-      return { success: true, users };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    const firstAttempt = await tryOnce();
+    if (firstAttempt.success) {
+      return { success: true, users: firstAttempt.users };
     }
+
+    if (firstAttempt.had404) {
+      await this.refreshQueryIds();
+      const secondAttempt = await tryOnce();
+      if (secondAttempt.success) {
+        return { success: true, users: secondAttempt.users };
+      }
+      return { success: false, error: secondAttempt.error };
+    }
+
+    return { success: false, error: firstAttempt.error };
   }
 
   /**
@@ -2188,45 +2239,76 @@ export class TwitterClient {
       features: JSON.stringify(features),
     });
 
-    const queryId = await this.getQueryId('Followers');
-    const url = `${TWITTER_API_BASE}/${queryId}/Followers?${params.toString()}`;
+    const tryOnce = async () => {
+      let lastError: string | undefined;
+      let had404 = false;
+      const queryIds = await this.getFollowersQueryIds();
 
-    try {
-      const response = await this.fetchWithTimeout(url, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
+      for (const queryId of queryIds) {
+        const url = `${TWITTER_API_BASE}/${queryId}/Followers?${params.toString()}`;
 
-      if (!response.ok) {
-        const text = await response.text();
-        return { success: false, error: `HTTP ${response.status}: ${text.slice(0, 200)}` };
-      }
+        try {
+          const response = await this.fetchWithTimeout(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+          });
 
-      const data = (await response.json()) as {
-        data?: {
-          user?: {
-            result?: {
-              timeline?: {
-                timeline?: {
-                  instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+          if (response.status === 404) {
+            had404 = true;
+            lastError = `HTTP ${response.status}`;
+            continue;
+          }
+
+          if (!response.ok) {
+            const text = await response.text();
+            return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+          }
+
+          const data = (await response.json()) as {
+            data?: {
+              user?: {
+                result?: {
+                  timeline?: {
+                    timeline?: {
+                      instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+                    };
+                  };
                 };
               };
             };
+            errors?: Array<{ message: string }>;
           };
-        };
-        errors?: Array<{ message: string }>;
-      };
 
-      if (data.errors && data.errors.length > 0) {
-        return { success: false, error: data.errors.map((e) => e.message).join(', ') };
+          if (data.errors && data.errors.length > 0) {
+            return { success: false as const, error: data.errors.map((e) => e.message).join(', '), had404 };
+          }
+
+          const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
+          const users = this.parseUsersFromInstructions(instructions);
+
+          return { success: true as const, users, had404 };
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+        }
       }
 
-      const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
-      const users = this.parseUsersFromInstructions(instructions);
+      return { success: false as const, error: lastError ?? 'Unknown error fetching followers', had404 };
+    };
 
-      return { success: true, users };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    const firstAttempt = await tryOnce();
+    if (firstAttempt.success) {
+      return { success: true, users: firstAttempt.users };
     }
+
+    if (firstAttempt.had404) {
+      await this.refreshQueryIds();
+      const secondAttempt = await tryOnce();
+      if (secondAttempt.success) {
+        return { success: true, users: secondAttempt.users };
+      }
+      return { success: false, error: secondAttempt.error };
+    }
+
+    return { success: false, error: firstAttempt.error };
   }
 }
