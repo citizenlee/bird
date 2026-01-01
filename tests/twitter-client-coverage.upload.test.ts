@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TwitterClient } from '../src/lib/twitter-client.js';
+import { extractArticleText } from '../src/lib/twitter-client-utils.js';
 
 const validCookies = {
   authToken: 'test_auth_token',
@@ -17,7 +18,6 @@ type ResponseLike = {
 
 type TwitterClientUploadPrivate = TwitterClient & {
   sleep: (ms: number) => Promise<void>;
-  extractArticleText: (result: unknown) => string | undefined;
 };
 
 const makeResponse = (overrides: Partial<ResponseLike> = {}): ResponseLike => ({
@@ -188,12 +188,10 @@ describe('TwitterClient upload coverage', () => {
 
   describe('article extraction edge cases', () => {
     it('logs article payloads when debug flag is set', () => {
-      const client = new TwitterClient({ cookies: validCookies });
       process.env.BIRD_DEBUG_ARTICLE = '1';
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      const clientPrivate = client as unknown as TwitterClientUploadPrivate;
-      const result = clientPrivate.extractArticleText({
+      const result = extractArticleText({
         rest_id: '1',
         article: {
           title: 'Title',
@@ -207,9 +205,7 @@ describe('TwitterClient upload coverage', () => {
     });
 
     it('drops duplicate body when it matches the title', () => {
-      const client = new TwitterClient({ cookies: validCookies });
-      const clientPrivate = client as unknown as TwitterClientUploadPrivate;
-      const result = clientPrivate.extractArticleText({
+      const result = extractArticleText({
         rest_id: '1',
         article: {
           title: 'Same',

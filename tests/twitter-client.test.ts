@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type TweetData, TwitterClient } from '../src/lib/twitter-client.js';
+import { mapTweetResult } from '../src/lib/twitter-client-utils.js';
 
 describe('TwitterClient', () => {
   const originalFetch = global.fetch;
@@ -992,9 +993,7 @@ describe('TwitterClient', () => {
       root.quoted_status_result = { result: quoted };
 
       const client = new TwitterClient({ cookies: validCookies });
-      const mapped = (
-        client as unknown as { mapTweetResult: (result: unknown) => TweetData | undefined }
-      ).mapTweetResult(root);
+      const mapped = mapTweetResult(root, (client as { quoteDepth: number }).quoteDepth);
 
       expect(mapped?.quotedTweet?.id).toBe('2');
       expect(mapped?.quotedTweet?.quotedTweet).toBeUndefined();
@@ -1006,9 +1005,7 @@ describe('TwitterClient', () => {
       root.quoted_status_result = { result: quoted };
 
       const client = new TwitterClient({ cookies: validCookies, quoteDepth: 0 });
-      const mapped = (
-        client as unknown as { mapTweetResult: (result: unknown) => TweetData | undefined }
-      ).mapTweetResult(root);
+      const mapped = mapTweetResult(root, (client as { quoteDepth: number }).quoteDepth);
 
       expect(mapped?.quotedTweet).toBeUndefined();
     });
@@ -1021,9 +1018,7 @@ describe('TwitterClient', () => {
       root.quoted_status_result = { result: quoted1 };
 
       const client = new TwitterClient({ cookies: validCookies, quoteDepth: 2 });
-      const mapped = (
-        client as unknown as { mapTweetResult: (result: unknown) => TweetData | undefined }
-      ).mapTweetResult(root);
+      const mapped = mapTweetResult(root, (client as { quoteDepth: number }).quoteDepth);
 
       expect(mapped?.quotedTweet?.id).toBe('2');
       expect(mapped?.quotedTweet?.quotedTweet?.id).toBe('3');
@@ -1041,9 +1036,7 @@ describe('TwitterClient', () => {
       };
 
       const client = new TwitterClient({ cookies: validCookies });
-      const mapped = (
-        client as unknown as { mapTweetResult: (result: unknown) => TweetData | undefined }
-      ).mapTweetResult(root);
+      const mapped = mapTweetResult(root, (client as { quoteDepth: number }).quoteDepth);
 
       expect(mapped?.quotedTweet?.id).toBe('2');
     });

@@ -1,0 +1,330 @@
+import {
+  SETTINGS_NAME_REGEX,
+  SETTINGS_SCREEN_NAME_REGEX,
+  SETTINGS_USER_ID_REGEX,
+  TWITTER_API_BASE,
+} from './twitter-client-constants.js';
+import { buildFollowingFeatures } from './twitter-client-features.js';
+import { type AbstractConstructor, type TwitterClientBase } from './twitter-client-base.js';
+import type { CurrentUserResult, FollowingResult } from './twitter-client-types.js';
+import { parseUsersFromInstructions } from './twitter-client-utils.js';
+
+export function withUsers<TBase extends AbstractConstructor<TwitterClientBase>>(Base: TBase) {
+  return class extends Base {
+    private async getFollowingQueryIds(): Promise<string[]> {
+      const primary = await this.getQueryId('Following');
+      return Array.from(new Set([primary, 'BEkNpEt5pNETESoqMsTEGA']));
+    }
+
+    private async getFollowersQueryIds(): Promise<string[]> {
+      const primary = await this.getQueryId('Followers');
+      return Array.from(new Set([primary, 'kuFUYP9eV1FPoEy4N-pi7w']));
+    }
+
+    /**
+     * Fetch the account associated with the current cookies
+     */
+    async getCurrentUser(): Promise<CurrentUserResult> {
+      const candidateUrls = [
+        'https://x.com/i/api/account/settings.json',
+        'https://api.twitter.com/1.1/account/settings.json',
+        'https://x.com/i/api/account/verify_credentials.json?skip_status=true&include_entities=false',
+        'https://api.twitter.com/1.1/account/verify_credentials.json?skip_status=true&include_entities=false',
+      ];
+
+      let lastError: string | undefined;
+
+      for (const url of candidateUrls) {
+        try {
+          const response = await this.fetchWithTimeout(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+          });
+
+          if (!response.ok) {
+            const text = await response.text();
+            lastError = `HTTP ${response.status}: ${text.slice(0, 200)}`;
+            continue;
+          }
+
+          // biome-ignore lint/suspicious/noExplicitAny: Twitter API response is dynamic here
+          let data: any;
+          try {
+            data = await response.json();
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : String(error);
+            continue;
+          }
+
+          const username =
+            typeof data?.screen_name === 'string'
+              ? data.screen_name
+              : typeof data?.user?.screen_name === 'string'
+                ? data.user.screen_name
+                : null;
+
+          const name =
+            typeof data?.name === 'string'
+              ? data.name
+              : typeof data?.user?.name === 'string'
+                ? data.user.name
+                : (username ?? '');
+
+          const userId =
+            typeof data?.user_id === 'string'
+              ? data.user_id
+              : typeof data?.user_id_str === 'string'
+                ? data.user_id_str
+                : typeof data?.user?.id_str === 'string'
+                  ? data.user.id_str
+                  : typeof data?.user?.id === 'string'
+                    ? data.user.id
+                    : null;
+
+          if (username && userId) {
+            this.clientUserId = userId;
+            return {
+              success: true,
+              user: {
+                id: userId,
+                username,
+                name: name || username,
+              },
+            };
+          }
+
+          lastError = 'Could not determine current user from response';
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+        }
+      }
+
+      // Fallback: scrape the authenticated settings page (HTML) for screen_name/user_id
+      const profilePages = ['https://x.com/settings/account', 'https://twitter.com/settings/account'];
+      for (const page of profilePages) {
+        try {
+          const response = await this.fetchWithTimeout(page, {
+            headers: {
+              cookie: this.cookieHeader,
+              'user-agent': this.userAgent,
+            },
+          });
+
+          if (!response.ok) {
+            lastError = `HTTP ${response.status} (settings page)`;
+            continue;
+          }
+
+          const html = await response.text();
+          const usernameMatch = SETTINGS_SCREEN_NAME_REGEX.exec(html);
+          const idMatch = SETTINGS_USER_ID_REGEX.exec(html);
+          const nameMatch = SETTINGS_NAME_REGEX.exec(html);
+
+          const username = usernameMatch?.[1];
+          const userId = idMatch?.[1];
+          const name = nameMatch?.[1]?.replace(/\\"/g, '"');
+
+          if (username && userId) {
+            return {
+              success: true,
+              user: {
+                id: userId,
+                username,
+                name: name || username,
+              },
+            };
+          }
+
+          lastError = 'Could not parse settings page for user info';
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+        }
+      }
+
+      return {
+        success: false,
+        error: lastError ?? 'Unknown error fetching current user',
+      };
+    }
+
+    /**
+     * Get users that a user is following
+     */
+    async getFollowing(userId: string, count = 20): Promise<FollowingResult> {
+      const variables = {
+        userId,
+        count,
+        includePromotedContent: false,
+      };
+
+      const features = buildFollowingFeatures();
+
+      const params = new URLSearchParams({
+        variables: JSON.stringify(variables),
+        features: JSON.stringify(features),
+      });
+
+      const tryOnce = async () => {
+        let lastError: string | undefined;
+        let had404 = false;
+        const queryIds = await this.getFollowingQueryIds();
+
+        for (const queryId of queryIds) {
+          const url = `${TWITTER_API_BASE}/${queryId}/Following?${params.toString()}`;
+
+          try {
+            const response = await this.fetchWithTimeout(url, {
+              method: 'GET',
+              headers: this.getHeaders(),
+            });
+
+            if (response.status === 404) {
+              had404 = true;
+              lastError = `HTTP ${response.status}`;
+              continue;
+            }
+
+            if (!response.ok) {
+              const text = await response.text();
+              return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+            }
+
+            const data = (await response.json()) as {
+              data?: {
+                user?: {
+                  result?: {
+                    timeline?: {
+                      timeline?: {
+                        instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+                      };
+                    };
+                  };
+                };
+              };
+              errors?: Array<{ message: string }>;
+            };
+
+            if (data.errors && data.errors.length > 0) {
+              return { success: false as const, error: data.errors.map((e) => e.message).join(', '), had404 };
+            }
+
+            const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
+            const users = parseUsersFromInstructions(instructions);
+
+            return { success: true as const, users, had404 };
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : String(error);
+          }
+        }
+
+        return { success: false as const, error: lastError ?? 'Unknown error fetching following', had404 };
+      };
+
+      const firstAttempt = await tryOnce();
+      if (firstAttempt.success) {
+        return { success: true, users: firstAttempt.users };
+      }
+
+      if (firstAttempt.had404) {
+        await this.refreshQueryIds();
+        const secondAttempt = await tryOnce();
+        if (secondAttempt.success) {
+          return { success: true, users: secondAttempt.users };
+        }
+        return { success: false, error: secondAttempt.error };
+      }
+
+      return { success: false, error: firstAttempt.error };
+    }
+
+    /**
+     * Get users that follow a user
+     */
+    async getFollowers(userId: string, count = 20): Promise<FollowingResult> {
+      const variables = {
+        userId,
+        count,
+        includePromotedContent: false,
+      };
+
+      const features = buildFollowingFeatures();
+
+      const params = new URLSearchParams({
+        variables: JSON.stringify(variables),
+        features: JSON.stringify(features),
+      });
+
+      const tryOnce = async () => {
+        let lastError: string | undefined;
+        let had404 = false;
+        const queryIds = await this.getFollowersQueryIds();
+
+        for (const queryId of queryIds) {
+          const url = `${TWITTER_API_BASE}/${queryId}/Followers?${params.toString()}`;
+
+          try {
+            const response = await this.fetchWithTimeout(url, {
+              method: 'GET',
+              headers: this.getHeaders(),
+            });
+
+            if (response.status === 404) {
+              had404 = true;
+              lastError = `HTTP ${response.status}`;
+              continue;
+            }
+
+            if (!response.ok) {
+              const text = await response.text();
+              return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+            }
+
+            const data = (await response.json()) as {
+              data?: {
+                user?: {
+                  result?: {
+                    timeline?: {
+                      timeline?: {
+                        instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+                      };
+                    };
+                  };
+                };
+              };
+              errors?: Array<{ message: string }>;
+            };
+
+            if (data.errors && data.errors.length > 0) {
+              return { success: false as const, error: data.errors.map((e) => e.message).join(', '), had404 };
+            }
+
+            const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
+            const users = parseUsersFromInstructions(instructions);
+
+            return { success: true as const, users, had404 };
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : String(error);
+          }
+        }
+
+        return { success: false as const, error: lastError ?? 'Unknown error fetching followers', had404 };
+      };
+
+      const firstAttempt = await tryOnce();
+      if (firstAttempt.success) {
+        return { success: true, users: firstAttempt.users };
+      }
+
+      if (firstAttempt.had404) {
+        await this.refreshQueryIds();
+        const secondAttempt = await tryOnce();
+        if (secondAttempt.success) {
+          return { success: true, users: secondAttempt.users };
+        }
+        return { success: false, error: secondAttempt.error };
+      }
+
+      return { success: false, error: firstAttempt.error };
+    }
+  };
+}
