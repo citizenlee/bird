@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TWITTER_GRAPHQL_POST_URL } from '../src/lib/twitter-client-constants.js';
 import { TwitterClient } from '../src/lib/twitter-client.js';
 
 const validCookies = {
@@ -20,6 +21,8 @@ type TwitterClientApiPrivate = TwitterClient & {
   getFollowingQueryIds: () => Promise<string[]>;
   getFollowersQueryIds: () => Promise<string[]>;
   getLikesQueryIds: () => Promise<string[]>;
+  getQueryId: (operationName: string) => Promise<string>;
+  refreshQueryIds: () => Promise<void>;
   getCurrentUser: () => Promise<{
     success: boolean;
     user?: { id: string; username: string; name: string };
@@ -219,6 +222,44 @@ describe('TwitterClient API coverage', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('HTTP 404');
+    });
+  });
+
+  describe('unbookmark error paths', () => {
+    it('returns API errors from payloads', async () => {
+      const mockFetch = vi.fn().mockResolvedValueOnce(
+        makeResponse({
+          json: async () => ({ errors: [{ message: 'bad' }] }),
+        }),
+      );
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      const client = new TwitterClient({ cookies: validCookies }) as unknown as TwitterClientApiPrivate;
+      client.getQueryId = async () => 'test';
+
+      const result = await (client as TwitterClient).unbookmark('1');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('bad');
+    });
+
+    it('falls back to the graphql endpoint after repeated 404s', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce(makeResponse({ ok: false, status: 404, text: async () => 'nope' }))
+        .mockResolvedValueOnce(makeResponse({ ok: false, status: 404, text: async () => 'nope' }))
+        .mockResolvedValueOnce(makeResponse({}));
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      const client = new TwitterClient({ cookies: validCookies }) as unknown as TwitterClientApiPrivate;
+      client.getQueryId = async () => 'test';
+      client.refreshQueryIds = async () => undefined;
+
+      const result = await (client as TwitterClient).unbookmark('1');
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(String(mockFetch.mock.calls[2][0])).toBe(TWITTER_GRAPHQL_POST_URL);
     });
   });
 

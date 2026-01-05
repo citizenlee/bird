@@ -31,6 +31,7 @@ export function registerQueryIdsCommand(program: Command, ctx: CliContext): void
         'CreateTweet',
         'CreateRetweet',
         'FavoriteTweet',
+        'DeleteBookmark',
         'TweetDetail',
         'SearchTimeline',
         'UserArticlesTweets',
