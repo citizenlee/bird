@@ -1,5 +1,7 @@
+import { applyFeatureOverrides } from './runtime-features.js';
+
 export function buildArticleFeatures(): Record<string, boolean> {
-  return {
+  return applyFeatureOverrides('article', {
     rweb_video_screen_enabled: true,
     profile_label_improvements_pcf_label_in_post_enabled: true,
     responsive_web_profile_redirect_enabled: true,
@@ -35,11 +37,11 @@ export function buildArticleFeatures(): Record<string, boolean> {
     responsive_web_grok_imagine_annotation_enabled: true,
     responsive_web_grok_community_note_auto_translation_is_enabled: false,
     responsive_web_enhance_cards_enabled: false,
-  };
+  });
 }
 
 export function buildTweetDetailFeatures(): Record<string, boolean> {
-  return {
+  return applyFeatureOverrides('tweetDetail', {
     ...buildArticleFeatures(),
     responsive_web_graphql_exclude_directive_enabled: true,
     communities_web_enable_tweet_community_results_fetch: true,
@@ -52,7 +54,7 @@ export function buildTweetDetailFeatures(): Record<string, boolean> {
     tweet_awards_web_tipping_enabled: false,
     creator_subscriptions_quote_tweet_preview_enabled: false,
     verified_phone_label_enabled: false,
-  };
+  });
 }
 
 export function buildArticleFieldToggles(): Record<string, boolean> {
@@ -67,7 +69,7 @@ export function buildArticleFieldToggles(): Record<string, boolean> {
 }
 
 export function buildSearchFeatures(): Record<string, boolean> {
-  return {
+  return applyFeatureOverrides('search', {
     rweb_video_screen_enabled: true,
     profile_label_improvements_pcf_label_in_post_enabled: true,
     responsive_web_profile_redirect_enabled: true,
@@ -105,11 +107,11 @@ export function buildSearchFeatures(): Record<string, boolean> {
     responsive_web_grok_community_note_auto_translation_is_enabled: false,
     articles_preview_enabled: true,
     responsive_web_enhance_cards_enabled: false,
-  };
+  });
 }
 
 export function buildTweetCreateFeatures(): Record<string, boolean> {
-  return {
+  return applyFeatureOverrides('tweetCreate', {
     rweb_video_screen_enabled: true,
     creator_subscriptions_tweet_preview_api_enabled: true,
     premium_content_api_read_enabled: false,
@@ -145,11 +147,11 @@ export function buildTweetCreateFeatures(): Record<string, boolean> {
     responsive_web_grok_imagine_annotation_enabled: true,
     responsive_web_graphql_timeline_navigation_enabled: true,
     responsive_web_enhance_cards_enabled: false,
-  };
+  });
 }
 
 export function buildTimelineFeatures(): Record<string, boolean> {
-  return {
+  return applyFeatureOverrides('timeline', {
     ...buildSearchFeatures(),
     blue_business_profile_image_shape_enabled: true,
     responsive_web_text_conversations_enabled: false,
@@ -159,22 +161,22 @@ export function buildTimelineFeatures(): Record<string, boolean> {
     interactive_text_enabled: true,
     longform_notetweets_richtext_consumption_enabled: true,
     responsive_web_media_download_video_enabled: false,
-  };
+  });
 }
 
 export function buildBookmarksFeatures(): Record<string, boolean> {
-  return {
+  return applyFeatureOverrides('bookmarks', {
     ...buildTimelineFeatures(),
     graphql_timeline_v2_bookmark_timeline: true,
-  };
+  });
 }
 
 export function buildLikesFeatures(): Record<string, boolean> {
-  return buildTimelineFeatures();
+  return applyFeatureOverrides('likes', buildTimelineFeatures());
 }
 
 export function buildListsFeatures(): Record<string, boolean> {
-  return {
+  return applyFeatureOverrides('lists', {
     rweb_video_screen_enabled: true,
     profile_label_improvements_pcf_label_in_post_enabled: true,
     responsive_web_profile_redirect_enabled: true,
@@ -210,11 +212,11 @@ export function buildListsFeatures(): Record<string, boolean> {
     responsive_web_grok_imagine_annotation_enabled: true,
     responsive_web_grok_community_note_auto_translation_is_enabled: false,
     responsive_web_enhance_cards_enabled: false,
-  };
+  });
 }
 
 export function buildFollowingFeatures(): Record<string, boolean> {
-  return {
+  return applyFeatureOverrides('following', {
     rweb_video_screen_enabled: true,
     profile_label_improvements_pcf_label_in_post_enabled: false,
     responsive_web_profile_redirect_enabled: true,
@@ -250,5 +252,5 @@ export function buildFollowingFeatures(): Record<string, boolean> {
     responsive_web_grok_imagine_annotation_enabled: false,
     responsive_web_grok_community_note_auto_translation_is_enabled: false,
     responsive_web_enhance_cards_enabled: false,
-  };
+  });
 }
