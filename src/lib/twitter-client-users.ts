@@ -6,7 +6,7 @@ import {
   TWITTER_API_BASE,
 } from './twitter-client-constants.js';
 import { buildFollowingFeatures } from './twitter-client-features.js';
-import type { CurrentUserResult, FollowingResult, TwitterUser } from './twitter-client-types.js';
+import type { CurrentUserResult, FollowingResult, FollowResult, TwitterUser, UnfollowResult } from './twitter-client-types.js';
 import { extractCursorFromInstructions, parseUsersFromInstructions } from './twitter-client-utils.js';
 
 type RestUser = {
@@ -26,6 +26,8 @@ export interface TwitterClientUserMethods {
   getCurrentUser(): Promise<CurrentUserResult>;
   getFollowing(userId: string, count?: number, cursor?: string): Promise<FollowingResult>;
   getFollowers(userId: string, count?: number, cursor?: string): Promise<FollowingResult>;
+  unfollowUser(userId: string): Promise<UnfollowResult>;
+  followUser(userId: string): Promise<FollowResult>;
 }
 
 export function withUsers<TBase extends AbstractConstructor<TwitterClientBase>>(
@@ -492,6 +494,108 @@ export function withUsers<TBase extends AbstractConstructor<TwitterClientBase>>(
       }
 
       return { success: false, error: firstAttempt.error };
+    }
+
+    /**
+     * Unfollow a user by their user ID
+     */
+    async unfollowUser(userId: string): Promise<UnfollowResult> {
+      const urls = [
+        'https://x.com/i/api/1.1/friendships/destroy.json',
+        'https://api.twitter.com/1.1/friendships/destroy.json',
+      ];
+
+      const params = new URLSearchParams({
+        user_id: userId,
+      });
+
+      let lastError: string | undefined;
+
+      for (const url of urls) {
+        try {
+          const response = await this.fetchWithTimeout(url, {
+            method: 'POST',
+            headers: {
+              ...this.getHeaders(),
+              'content-type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+          });
+
+          if (!response.ok) {
+            const text = await response.text();
+            lastError = `HTTP ${response.status}: ${text.slice(0, 200)}`;
+            continue;
+          }
+
+          const data = (await response.json()) as {
+            id_str?: string;
+            errors?: Array<{ message: string; code?: number }>;
+          };
+
+          if (data.errors && data.errors.length > 0) {
+            return { success: false, error: data.errors.map((e) => e.message).join(', ') };
+          }
+
+          // Success - the response contains the unfollowed user's data
+          return { success: true };
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+        }
+      }
+
+      return { success: false, error: lastError ?? 'Unknown error unfollowing user' };
+    }
+
+    /**
+     * Follow a user by their user ID
+     */
+    async followUser(userId: string): Promise<FollowResult> {
+      const urls = [
+        'https://x.com/i/api/1.1/friendships/create.json',
+        'https://api.twitter.com/1.1/friendships/create.json',
+      ];
+
+      const params = new URLSearchParams({
+        user_id: userId,
+      });
+
+      let lastError: string | undefined;
+
+      for (const url of urls) {
+        try {
+          const response = await this.fetchWithTimeout(url, {
+            method: 'POST',
+            headers: {
+              ...this.getHeaders(),
+              'content-type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+          });
+
+          if (!response.ok) {
+            const text = await response.text();
+            lastError = `HTTP ${response.status}: ${text.slice(0, 200)}`;
+            continue;
+          }
+
+          const data = (await response.json()) as {
+            id_str?: string;
+            errors?: Array<{ message: string; code?: number }>;
+          };
+
+          if (data.errors && data.errors.length > 0) {
+            return { success: false, error: data.errors.map((e) => e.message).join(', ') };
+          }
+
+          // Success - the response contains the followed user's data
+          return { success: true };
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+        }
+      }
+
+      return { success: false, error: lastError ?? 'Unknown error following user' };
     }
   }
 

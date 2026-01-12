@@ -10,6 +10,8 @@ import { registerQueryIdsCommand } from '../commands/query-ids.js';
 import { registerReadCommands } from '../commands/read.js';
 import { registerSearchCommands } from '../commands/search.js';
 import { registerUnbookmarkCommand } from '../commands/unbookmark.js';
+import { registerFollowCommand } from '../commands/follow.js';
+import { registerUnfollowCommand } from '../commands/unfollow.js';
 import { registerUserTweetsCommand } from '../commands/user-tweets.js';
 import { registerUserCommands } from '../commands/users.js';
 import { getCliVersion } from '../lib/version.js';
@@ -26,6 +28,8 @@ export const KNOWN_COMMANDS = new Set([
   'mentions',
   'bookmarks',
   'unbookmark',
+  'unfollow',
+  'follow',
   'following',
   'followers',
   'likes',
@@ -137,6 +141,8 @@ export function createProgram(ctx: CliContext): Command {
   registerSearchCommands(program, ctx);
   registerBookmarksCommand(program, ctx);
   registerUnbookmarkCommand(program, ctx);
+  registerFollowCommand(program, ctx);
+  registerUnfollowCommand(program, ctx);
   registerListsCommand(program, ctx);
   registerHomeCommand(program, ctx);
   registerUserCommands(program, ctx);

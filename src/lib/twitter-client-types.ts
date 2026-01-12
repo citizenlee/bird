@@ -230,6 +230,24 @@ export type BookmarkMutationResult =
       error: string;
     };
 
+export type UnfollowResult =
+  | {
+      success: true;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+export type FollowResult =
+  | {
+      success: true;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
 export interface UploadMediaResult {
   success: boolean;
   mediaId?: string;

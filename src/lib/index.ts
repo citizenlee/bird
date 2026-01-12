@@ -23,4 +23,4 @@ export type { ExploreTab, NewsFetchOptions, NewsItem, NewsResult } from './twitt
 export type { SearchFetchOptions } from './twitter-client-search.js';
 export type { TimelineFetchOptions } from './twitter-client-timelines.js';
 export type { TweetFetchOptions } from './twitter-client-tweet-detail.js';
-export type { TweetResult, UploadMediaResult } from './twitter-client-types.js';
+export type { FollowResult, TweetResult, UnfollowResult, UploadMediaResult } from './twitter-client-types.js';
