@@ -1,4 +1,5 @@
 import type { Command } from 'commander';
+import { parsePaginationFlags } from '../cli/pagination.js';
 import type { CliContext } from '../cli/shared.js';
 import { mentionsQueryFromUserOption, normalizeHandle } from '../lib/normalize-handle.js';
 import { TwitterClient } from '../lib/twitter-client.js';
@@ -30,7 +31,13 @@ export function registerSearchCommands(program: Command, ctx: CliContext): void 
         const timeoutMs = ctx.resolveTimeoutFromOptions(opts);
         const quoteDepth = ctx.resolveQuoteDepthFromOptions(opts);
         const count = Number.parseInt(cmdOpts.count || '10', 10);
-        const maxPages = cmdOpts.maxPages ? Number.parseInt(cmdOpts.maxPages, 10) : undefined;
+
+        const pagination = parsePaginationFlags(cmdOpts);
+        if (!pagination.ok) {
+          console.error(`${ctx.p('err')}${pagination.error}`);
+          process.exit(1);
+        }
+        const maxPages = pagination.maxPages;
 
         const { cookies, warnings } = await ctx.resolveCredentialsFromOptions(opts);
 
@@ -43,7 +50,7 @@ export function registerSearchCommands(program: Command, ctx: CliContext): void 
           process.exit(1);
         }
 
-        const usePagination = cmdOpts.all || cmdOpts.cursor;
+        const usePagination = pagination.usePagination;
         if (maxPages !== undefined && !usePagination) {
           console.error(`${ctx.p('err')}--max-pages requires --all or --cursor.`);
           process.exit(1);
@@ -52,15 +59,11 @@ export function registerSearchCommands(program: Command, ctx: CliContext): void 
           console.error(`${ctx.p('err')}Invalid --count. Expected a positive integer.`);
           process.exit(1);
         }
-        if (maxPages !== undefined && (!Number.isFinite(maxPages) || maxPages <= 0)) {
-          console.error(`${ctx.p('err')}Invalid --max-pages. Expected a positive integer.`);
-          process.exit(1);
-        }
 
         const client = new TwitterClient({ cookies, timeoutMs, quoteDepth });
         const includeRaw = cmdOpts.jsonFull ?? false;
         const searchOptions = { includeRaw };
-        const paginationOptions = { includeRaw, maxPages, cursor: cmdOpts.cursor };
+        const paginationOptions = { includeRaw, maxPages, cursor: pagination.cursor };
         const result = usePagination
           ? await client.getAllSearchResults(query, paginationOptions)
           : await client.search(query, count, searchOptions);

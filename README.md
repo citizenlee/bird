@@ -152,6 +152,7 @@ const sportsNews = await client.getNews(10, {
 - `bird reply <tweet-id-or-url> "<text>"` — reply to a tweet using its ID or URL.
 - `bird help [command]` — show help (or help for a subcommand).
 - `bird query-ids [--fresh] [--json]` — inspect or refresh cached GraphQL query IDs.
+- `bird home [-n count] [--following] [--json] [--json-full]` — fetch your home timeline (For You) or Following feed.
 - `bird read <tweet-id-or-url> [--json]` — fetch tweet content as text or JSON.
 - `bird <tweet-id-or-url> [--json]` — shorthand for `read` when only a URL or ID is provided.
 - `bird replies <tweet-id-or-url> [--all] [--max-pages n] [--cursor string] [--delay ms] [--json]` — list replies to a tweet.
@@ -159,24 +160,17 @@ const sportsNews = await client.getNews(10, {
 - `bird search "<query>" [-n count] [--all] [--max-pages n] [--cursor string] [--json]` — search for tweets matching a query; `--max-pages` requires `--all` or `--cursor`.
 - `bird mentions [-n count] [--user @handle] [--json]` — find tweets mentioning a user (defaults to the authenticated user).
 - `bird user-tweets <@handle> [-n count] [--cursor string] [--max-pages n] [--delay ms] [--json]` — get tweets from a user's profile timeline.
-- `bird bookmarks [-n count] [--folder-id id] [--all] [--max-pages n] [--json]` — list your bookmarked tweets (or a specific bookmark folder); `--max-pages` requires `--all`.
+- `bird bookmarks [-n count] [--folder-id id] [--all] [--max-pages n] [--cursor string] [--json]` — list your bookmarked tweets (or a specific bookmark folder); `--max-pages` requires `--all` or `--cursor`.
 - `bird unbookmark <tweet-id-or-url...>` — remove one or more bookmarks by tweet ID or URL.
 - `bird likes [-n count] [--all] [--max-pages n] [--cursor string] [--json] [--json-full]` — list your liked tweets; `--max-pages` requires `--all` or `--cursor`.
 - `bird news [-n count] [--ai-only] [--with-tweets] [--tweets-per-item n] [--for-you] [--news-only] [--sports] [--entertainment] [--trending-only] [--json]` — fetch news and trending topics from X's Explore tabs.
 - `bird trending` — alias for `news` command.
+- `bird lists [--member-of] [-n count] [--json]` — list your lists (owned or memberships).
 - `bird list-timeline <list-id-or-url> [-n count] [--all] [--max-pages n] [--cursor string] [--json]` — get tweets from a list timeline; `--max-pages` implies `--all`.
-- `bird following [--user <userId>] [-n count] [--json]` — list users that you (or another user) follow.
-- `bird followers [--user <userId>] [-n count] [--json]` — list users that follow you (or another user).
+- `bird following [--user <userId>] [-n count] [--cursor string] [--all] [--max-pages n] [--json]` — list users that you (or another user) follow; `--max-pages` requires `--all`.
+- `bird followers [--user <userId>] [-n count] [--cursor string] [--all] [--max-pages n] [--json]` — list users that follow you (or another user); `--max-pages` requires `--all`.
 - `bird whoami` — print which Twitter account your cookies belong to.
 - `bird check` — show which credentials are available and where they were sourced from.
- - `bird likes [-n count] [--all] [--max-pages n] [--cursor string] [--json] [--json-full]` — list your liked tweets; `--max-pages` requires `--all` or `--cursor`.
- - `bird news [-n count] [--ai-only] [--with-tweets] [--tweets-per-item n] [--for-you] [--news-only] [--sports] [--entertainment] [--trending-only] [--json]` — fetch news and trending topics from X's Explore tabs (fetches from For You, News, Sports, and Entertainment tabs by default).
- - `bird trending` — alias for `news` command.
- - `bird list-timeline <list-id-or-url> [-n count] [--all] [--max-pages n] [--cursor string] [--json]` — get tweets from a list timeline; `--max-pages` implies `--all`.
- - `bird following [--user <userId>] [-n count] [--json]` — list users that you (or another user) follow.
- - `bird followers [--user <userId>] [-n count] [--json]` — list users that follow you (or another user).
- - `bird whoami` — print which Twitter account your cookies belong to.
- - `bird check` — show which credentials are available and where they were sourced from.
 
 Global options:
 - `--auth-token <token>`: set the `auth_token` cookie manually.

@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { parsePositiveIntFlag } from '../cli/pagination.js';
+import { parsePaginationFlags } from '../cli/pagination.js';
 import type { CliContext } from '../cli/shared.js';
 import { extractBookmarkFolderId } from '../lib/extract-bookmark-folder-id.js';
 import { TwitterClient } from '../lib/twitter-client.js';
@@ -28,12 +28,13 @@ export function registerBookmarksCommand(program: Command, ctx: CliContext): voi
         const opts = program.opts();
         const timeoutMs = ctx.resolveTimeoutFromOptions(opts);
         const count = Number.parseInt(cmdOpts.count || '20', 10);
-        const maxPagesParsed = parsePositiveIntFlag(cmdOpts.maxPages, '--max-pages');
-        if (!maxPagesParsed.ok) {
-          console.error(`${ctx.p('err')}${maxPagesParsed.error}`);
+
+        const pagination = parsePaginationFlags(cmdOpts);
+        if (!pagination.ok) {
+          console.error(`${ctx.p('err')}${pagination.error}`);
           process.exit(1);
         }
-        const maxPages = maxPagesParsed.value;
+        const maxPages = pagination.maxPages;
 
         const { cookies, warnings } = await ctx.resolveCredentialsFromOptions(opts);
 
@@ -46,7 +47,7 @@ export function registerBookmarksCommand(program: Command, ctx: CliContext): voi
           process.exit(1);
         }
 
-        const usePagination = Boolean(cmdOpts.all || cmdOpts.cursor);
+        const usePagination = pagination.usePagination;
         if (maxPages !== undefined && !usePagination) {
           console.error(`${ctx.p('err')}--max-pages requires --all or --cursor.`);
           process.exit(1);
@@ -64,7 +65,7 @@ export function registerBookmarksCommand(program: Command, ctx: CliContext): voi
         }
         const includeRaw = cmdOpts.jsonFull ?? false;
         const timelineOptions = { includeRaw };
-        const paginationOptions = { includeRaw, maxPages, cursor: cmdOpts.cursor };
+        const paginationOptions = { includeRaw, maxPages, cursor: pagination.cursor };
         const result = folderId
           ? usePagination
             ? await client.getAllBookmarkFolderTimeline(folderId, paginationOptions)
