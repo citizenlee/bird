@@ -500,102 +500,112 @@ export function withUsers<TBase extends AbstractConstructor<TwitterClientBase>>(
      * Unfollow a user by their user ID
      */
     async unfollowUser(userId: string): Promise<UnfollowResult> {
-      const urls = [
-        'https://x.com/i/api/1.1/friendships/destroy.json',
-        'https://api.twitter.com/1.1/friendships/destroy.json',
-      ];
+      // Ensure we have the client user ID for proper headers
+      await this.ensureClientUserId();
+
+      const url = 'https://x.com/i/api/1.1/friendships/destroy.json';
 
       const params = new URLSearchParams({
+        include_profile_interstitial_type: '1',
+        include_blocking: '1',
+        include_blocked_by: '1',
+        include_followed_by: '1',
+        include_want_retweets: '1',
+        include_mute_edge: '1',
+        include_can_dm: '1',
+        include_can_media_tag: '1',
+        include_ext_is_blue_verified: '1',
+        include_ext_verified_type: '1',
+        include_ext_profile_image_shape: '1',
+        skip_status: '1',
         user_id: userId,
       });
 
-      let lastError: string | undefined;
+      try {
+        const response = await this.fetchWithTimeout(url, {
+          method: 'POST',
+          headers: {
+            ...this.getBaseHeaders(),
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
+        });
 
-      for (const url of urls) {
-        try {
-          const response = await this.fetchWithTimeout(url, {
-            method: 'POST',
-            headers: {
-              ...this.getHeaders(),
-              'content-type': 'application/x-www-form-urlencoded',
-            },
-            body: params.toString(),
-          });
-
-          if (!response.ok) {
-            const text = await response.text();
-            lastError = `HTTP ${response.status}: ${text.slice(0, 200)}`;
-            continue;
-          }
-
-          const data = (await response.json()) as {
-            id_str?: string;
-            errors?: Array<{ message: string; code?: number }>;
-          };
-
-          if (data.errors && data.errors.length > 0) {
-            return { success: false, error: data.errors.map((e) => e.message).join(', ') };
-          }
-
-          // Success - the response contains the unfollowed user's data
-          return { success: true };
-        } catch (error) {
-          lastError = error instanceof Error ? error.message : String(error);
+        if (!response.ok) {
+          const text = await response.text();
+          return { success: false, error: `HTTP ${response.status}: ${text.slice(0, 200)}` };
         }
-      }
 
-      return { success: false, error: lastError ?? 'Unknown error unfollowing user' };
+        const data = (await response.json()) as {
+          id_str?: string;
+          errors?: Array<{ message: string; code?: number }>;
+        };
+
+        if (data.errors && data.errors.length > 0) {
+          return { success: false, error: data.errors.map((e) => e.message).join(', ') };
+        }
+
+        // Success - the response contains the unfollowed user's data
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
     }
 
     /**
      * Follow a user by their user ID
      */
     async followUser(userId: string): Promise<FollowResult> {
-      const urls = [
-        'https://x.com/i/api/1.1/friendships/create.json',
-        'https://api.twitter.com/1.1/friendships/create.json',
-      ];
+      // Ensure we have the client user ID for proper headers
+      await this.ensureClientUserId();
+
+      const url = 'https://x.com/i/api/1.1/friendships/create.json';
 
       const params = new URLSearchParams({
+        include_profile_interstitial_type: '1',
+        include_blocking: '1',
+        include_blocked_by: '1',
+        include_followed_by: '1',
+        include_want_retweets: '1',
+        include_mute_edge: '1',
+        include_can_dm: '1',
+        include_can_media_tag: '1',
+        include_ext_is_blue_verified: '1',
+        include_ext_verified_type: '1',
+        include_ext_profile_image_shape: '1',
+        skip_status: '1',
         user_id: userId,
       });
 
-      let lastError: string | undefined;
+      try {
+        const response = await this.fetchWithTimeout(url, {
+          method: 'POST',
+          headers: {
+            ...this.getBaseHeaders(),
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
+        });
 
-      for (const url of urls) {
-        try {
-          const response = await this.fetchWithTimeout(url, {
-            method: 'POST',
-            headers: {
-              ...this.getHeaders(),
-              'content-type': 'application/x-www-form-urlencoded',
-            },
-            body: params.toString(),
-          });
-
-          if (!response.ok) {
-            const text = await response.text();
-            lastError = `HTTP ${response.status}: ${text.slice(0, 200)}`;
-            continue;
-          }
-
-          const data = (await response.json()) as {
-            id_str?: string;
-            errors?: Array<{ message: string; code?: number }>;
-          };
-
-          if (data.errors && data.errors.length > 0) {
-            return { success: false, error: data.errors.map((e) => e.message).join(', ') };
-          }
-
-          // Success - the response contains the followed user's data
-          return { success: true };
-        } catch (error) {
-          lastError = error instanceof Error ? error.message : String(error);
+        if (!response.ok) {
+          const text = await response.text();
+          return { success: false, error: `HTTP ${response.status}: ${text.slice(0, 200)}` };
         }
-      }
 
-      return { success: false, error: lastError ?? 'Unknown error following user' };
+        const data = (await response.json()) as {
+          id_str?: string;
+          errors?: Array<{ message: string; code?: number }>;
+        };
+
+        if (data.errors && data.errors.length > 0) {
+          return { success: false, error: data.errors.map((e) => e.message).join(', ') };
+        }
+
+        // Success - the response contains the followed user's data
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
     }
   }
 
